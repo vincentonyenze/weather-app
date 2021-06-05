@@ -1,0 +1,206 @@
+/* ===== Design tokens ===== */
+:root {
+  --color-bg-top: #4f8ef7;
+  --color-bg-bottom: #a5c8ff;
+  --color-surface: rgba(255, 255, 255, 0.92);
+  --color-text: #1e293b;
+  --color-muted: #64748b;
+  --color-border: #e2e8f0;
+  --color-primary: #2563eb;
+  --color-primary-dark: #1d4ed8;
+  --color-primary-light: #eff6ff;
+  --color-error: #dc2626;
+
+  --radius: 18px;
+  --radius-small: 10px;
+  --shadow: 0 10px 30px rgba(15, 23, 42, 0.12);
+  --space: 1rem;
+}
+
+/* ===== Reset ===== */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+[hidden] {
+  display: none !important;
+}
+
+/* Hidden on screen, but still read by screen readers */
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+body {
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  color: var(--color-text);
+  line-height: 1.5;
+  min-height: 100vh;
+  background: linear-gradient(180deg, var(--color-bg-top), var(--color-bg-bottom));
+  background-attachment: fixed;
+  padding: calc(var(--space) * 2) var(--space);
+}
+
+/* ===== Layout ===== */
+.app {
+  max-width: 720px;
+  margin: 0 auto;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space);
+}
+
+/* ===== Header ===== */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  color: #fff;
+}
+
+.header__title {
+  font-size: 2rem;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+
+/* ===== Unit toggle ===== */
+.units {
+  display: flex;
+  padding: 0.2rem;
+  background: rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+}
+
+.unit-btn {
+  font: inherit;
+  font-weight: 700;
+  padding: 0.35rem 0.8rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: #fff;
+  cursor: pointer;
+}
+
+.unit-btn[aria-pressed="true"] {
+  background: #fff;
+  color: var(--color-primary);
+}
+
+/* ===== Search ===== */
+.search {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.search__input {
+  flex: 1;
+  min-width: 0;
+  font: inherit;
+  padding: 0.75rem 1rem;
+  border: 2px solid transparent;
+  border-radius: var(--radius-small);
+  background: var(--color-surface);
+  box-shadow: var(--shadow);
+}
+
+.search__input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+}
+
+/* ===== Buttons ===== */
+.btn {
+  font: inherit;
+  font-weight: 600;
+  padding: 0.75rem 1.1rem;
+  border: none;
+  border-radius: var(--radius-small);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.2s;
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: #fff;
+}
+
+.btn--primary:hover {
+  background: var(--color-primary-dark);
+}
+
+.btn--secondary {
+  background: var(--color-surface);
+  color: var(--color-primary);
+}
+
+.btn--secondary:hover {
+  background: #fff;
+}
+
+.btn:disabled {
+  opacity: 0.6;
+  cursor: wait;
+}
+
+.btn:focus-visible,
+.unit-btn:focus-visible {
+  outline: 3px solid #fff;
+  outline-offset: 2px;
+}
+
+/* ===== Panels (cards) ===== */
+.panel {
+  background: var(--color-surface);
+  border-radius: var(--radius);
+  box-shadow: var(--shadow);
+  padding: calc(var(--space) * 1.5);
+}
+
+.panel__title {
+  font-size: 1rem;
+  font-weight: 700;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  margin-bottom: var(--space);
+}
+
+/* ===== Status (loading / empty / error) ===== */
+.status {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.75rem;
+  padding: calc(var(--space) * 2) var(--space);
+  border-radius: var(--radius);
+  background: rgba(255, 255, 255, 0.25);
+  color: #fff;
+  font-weight: 600;
+  text-align: center;
+}
+
+/* ===== Footer ===== */
+.footer {
+  text-align: center;
+  font-size: 0.85rem;
+  color: rgba(255, 255, 255, 0.9);
+}
+
+.footer a {
+  color: #fff;
+}
