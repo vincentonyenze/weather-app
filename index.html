@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather App</title>
+  <link rel="stylesheet" href="style.css">
+  <script src="script.js" defer></script>
+</head>
+<body>
+  <main class="app">
+    <header class="header">
+      <h1 class="header__title">Weather</h1>
+
+      <div class="units" role="group" aria-label="Temperature unit">
+        <button type="button" class="unit-btn" data-unit="celsius" aria-pressed="true">°C</button>
+        <button type="button" class="unit-btn" data-unit="fahrenheit" aria-pressed="false">°F</button>
+      </div>
+    </header>
+
+    <!-- Search -->
+    <form id="search-form" class="search" role="search" novalidate>
+      <label for="city-input" class="visually-hidden">City name</label>
+      <input type="search" id="city-input" class="search__input"
+             placeholder="Search for a city…" autocomplete="off">
+      <button type="submit" class="btn btn--primary">Search</button>
+      <button type="button" id="location-btn" class="btn btn--secondary">📍 My location</button>
+    </form>
+
+    <!-- Shown when several cities have the same name -->
+    <section id="city-choices" class="panel city-choices" aria-labelledby="city-choices-title" hidden>
+      <h2 id="city-choices-title" class="panel__title">Which one did you mean?</h2>
+      <ul id="city-list" class="city-list"></ul>
+    </section>
+
+    <!-- Loading, empty and error messages -->
+    <div id="status" class="status" role="status" aria-live="polite">
+      <span class="spinner" aria-hidden="true"></span>
+      <p id="status-message">Search for a city to see the weather.</p>
+    </div>
+
+    <!-- Current weather -->
+    <section id="current-weather" class="panel current" aria-labelledby="location-name" hidden>
+      <div class="current__header">
+        <h2 id="location-name" class="current__location">City</h2>
+        <p id="location-detail" class="current__detail">Region, Country</p>
+      </div>
+
+      <div class="current__main">
+        <span id="current-icon" class="current__icon" aria-hidden="true">☀️</span>
+        <div>
+          <p id="current-temp" class="current__temp">--°</p>
+          <p id="current-description" class="current__description">--</p>
+        </div>
+      </div>
+
+      <dl class="details">
+        <div class="details__item">
+          <dt>Feels like</dt>
+          <dd id="feels-like">--</dd>
+        </div>
+        <div class="details__item">
+          <dt>Humidity</dt>
+          <dd id="humidity">--</dd>
+        </div>
+        <div class="details__item">
+          <dt>Wind</dt>
+          <dd id="wind">--</dd>
+        </div>
+      </dl>
+
+      <p id="updated-time" class="current__updated"></p>
+    </section>
+
+    <!-- 7-day forecast -->
+    <section id="forecast" class="panel" aria-labelledby="forecast-title" hidden>
+      <h2 id="forecast-title" class="panel__title">7-day forecast</h2>
+      <ul id="forecast-list" class="forecast-list"></ul>
+    </section>
+
+    <footer class="footer">
+      Weather data by <a href="https://open-meteo.com/" target="_blank" rel="noopener">Open-Meteo</a>
+    </footer>
+  </main>
+</body>
+</html>
