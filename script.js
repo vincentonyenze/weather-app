@@ -5,6 +5,7 @@ const statusEl = document.getElementById("status");
 const currentSection = document.getElementById("current-weather");
 const locationName = document.getElementById("location-name");
 const locationDetail = document.getElementById("location-detail");
+const currentIcon = document.getElementById("current-icon");
 const currentTemp = document.getElementById("current-temp");
 const currentDescription = document.getElementById("current-description");
 const feelsLike = document.getElementById("feels-like");
@@ -57,6 +58,16 @@ async function fetchWeather(latitude, longitude) {
   return response.json();
 }
 
+// ===== Weather codes =====
+const UNKNOWN_WEATHER = { description: "Unknown conditions", icon: "🌡️" };
+
+// Code -> { description, icon }, choosing the night icon when it's dark
+function getWeatherInfo(code, isDay = true) {
+  const info = WEATHER_CODES[code] ?? UNKNOWN_WEATHER;
+  const icon = !isDay && info.nightIcon ? info.nightIcon : info.icon;
+  return { description: info.description, icon };
+}
+
 // ===== Formatting =====
 function formatTemperature(value) {
   return `${Math.round(value)}°`;
@@ -79,9 +90,11 @@ function renderCurrentWeather(place, weather) {
   locationName.textContent = place.name;
   locationDetail.textContent = formatPlaceDetail(place);
 
+  // The API sends is_day as 1 or 0, so turn it into true/false
+  const { description, icon } = getWeatherInfo(current.weather_code, current.is_day === 1);
+  currentIcon.textContent = icon;
   currentTemp.textContent = formatTemperature(current.temperature_2m);
-  // Temporary: turned into words and an icon in Step 7
-  currentDescription.textContent = `Weather code ${current.weather_code}`;
+  currentDescription.textContent = description;
 
   feelsLike.textContent = formatTemperature(current.apparent_temperature);
   humidity.textContent = `${current.relative_humidity_2m}${units.relative_humidity_2m}`;
