@@ -2,6 +2,7 @@
 const searchForm = document.getElementById("search-form");
 const cityInput = document.getElementById("city-input");
 const statusEl = document.getElementById("status");
+const statusMessage = document.getElementById("status-message");
 const currentSection = document.getElementById("current-weather");
 const locationName = document.getElementById("location-name");
 const locationDetail = document.getElementById("location-detail");
@@ -84,6 +85,18 @@ function formatLocalTime(isoString) {
 }
 
 // ===== Rendering =====
+// One place to show any message: plain, loading (spinner) or error (red)
+function showStatus(message, { loading = false, error = false } = {}) {
+  statusMessage.textContent = message;
+  statusEl.classList.toggle("is-loading", loading);
+  statusEl.classList.toggle("is-error", error);
+  statusEl.hidden = false;
+}
+
+function hideResults() {
+  currentSection.hidden = true;
+}
+
 function renderCurrentWeather(place, weather) {
   const { current, current_units: units } = weather;
 
@@ -112,14 +125,19 @@ async function handleSearch(event) {
   const query = cityInput.value.trim();
   if (!query) return;
 
+  hideResults();
+  showStatus(`Searching for “${query}”…`, { loading: true });
+
   const cities = await searchCities(query);
   if (cities.length === 0) {
-    console.warn(`No city found for "${query}"`); // proper message in Step 9
+    showStatus(`No city called “${query}” was found. Check the spelling and try again.`);
     return;
   }
 
   // For now, use the best match (choosing between cities comes in Step 11)
   const place = cities[0];
+  showStatus(`Loading the weather for ${place.name}…`, { loading: true });
+
   const weather = await fetchWeather(place.latitude, place.longitude);
   renderCurrentWeather(place, weather);
 }
