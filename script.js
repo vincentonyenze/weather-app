@@ -29,7 +29,60 @@ const CURRENT_FIELDS = [
   "is_day",
 ];
 
+// ===== Errors =====
+// The request never reached the server (offline, DNS, blocked...)
+class NetworkError extends Error {
+  constructor() {
+    super("Could not reach the server");
+    this.name = "NetworkError";
+  }
+}
+
+// The server answered, but with an error status like 400 or 500
+class ApiError extends Error {
+  constructor(status, reason) {
+    super(reason || `Request failed with status ${status}`);
+    this.name = "ApiError";
+    this.status = status;
+  }
+}
+
+// Turn any error into a message a user can act on
+function getErrorMessage(error) {
+  if (error instanceof NetworkError) {
+    return navigator.onLine
+      ? "Couldn't reach the weather service. Check your connection, and that your computer's date and time are correct."
+      : "You appear to be offline. Reconnect to the internet and try again.";
+  }
+  if (error instanceof ApiError && error.status >= 500) {
+    return "The weather service is having problems right now. Please try again in a few minutes.";
+  }
+  if (error instanceof ApiError) {
+    return "The weather service couldn't handle that request. Please try a different search.";
+  }
+  return "Something went wrong while loading the weather. Please try again.";
+}
+
 // ===== API =====
+// fetch() only fails on network problems. A 404 or 500 still "succeeds",
+// so check response.ok and throw our own errors for both cases.
+async function fetchJson(url) {
+  let response;
+  try {
+    response = await fetch(url);
+  } catch {
+    throw new NetworkError();
+  }
+
+  if (!response.ok) {
+    // Open-Meteo explains errors as { error: true, reason: "..." }
+    const body = await response.json().catch(() => ({}));
+    throw new ApiError(response.status, body.reason);
+  }
+
+  return response.json();
+}
+
 // City name -> array of matching places (with latitude and longitude)
 async function searchCities(name) {
   const params = new URLSearchParams({
@@ -39,8 +92,7 @@ async function searchCities(name) {
     format: "json",
   });
 
-  const response = await fetch(`${GEOCODING_URL}?${params}`);
-  const data = await response.json();
+  const data = await fetchJson(`${GEOCODING_URL}?${params}`);
 
   // When nothing matches, the API leaves out `results` entirely
   return data.results ?? [];
@@ -55,8 +107,7 @@ async function fetchWeather(latitude, longitude) {
     timezone: "auto", // times come back in the city's own time zone
   });
 
-  const response = await fetch(`${FORECAST_URL}?${params}`);
-  return response.json();
+  return fetchJson(`${FORECAST_URL}?${params}`);
 }
 
 // ===== Weather codes =====
@@ -123,23 +174,33 @@ async function handleSearch(event) {
   event.preventDefault();
 
   const query = cityInput.value.trim();
-  if (!query) return;
+  if (!query) {
+    showStatus("Please type a city name first.");
+    cityInput.focus();
+    return;
+  }
 
   hideResults();
   showStatus(`Searching for “${query}”…`, { loading: true });
 
-  const cities = await searchCities(query);
-  if (cities.length === 0) {
-    showStatus(`No city called “${query}” was found. Check the spelling and try again.`);
-    return;
+  try {
+    const cities = await searchCities(query);
+    if (cities.length === 0) {
+      showStatus(`No city called “${query}” was found. Check the spelling and try again.`);
+      return;
+    }
+
+    // For now, use the best match (choosing between cities comes in Step 11)
+    const place = cities[0];
+    showStatus(`Loading the weather for ${place.name}…`, { loading: true });
+
+    const weather = await fetchWeather(place.latitude, place.longitude);
+    renderCurrentWeather(place, weather);
+  } catch (error) {
+    console.error(error); // full details for you, a friendly message for the user
+    hideResults();
+    showStatus(getErrorMessage(error), { error: true });
   }
-
-  // For now, use the best match (choosing between cities comes in Step 11)
-  const place = cities[0];
-  showStatus(`Loading the weather for ${place.name}…`, { loading: true });
-
-  const weather = await fetchWeather(place.latitude, place.longitude);
-  renderCurrentWeather(place, weather);
 }
 
 // ===== Init =====
