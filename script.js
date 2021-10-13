@@ -13,6 +13,8 @@ const feelsLike = document.getElementById("feels-like");
 const humidity = document.getElementById("humidity");
 const wind = document.getElementById("wind");
 const updatedTime = document.getElementById("updated-time");
+const forecastSection = document.getElementById("forecast");
+const forecastList = document.getElementById("forecast-list");
 
 // ===== Config =====
 const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
@@ -28,6 +30,9 @@ const CURRENT_FIELDS = [
   "weather_code",
   "is_day",
 ];
+
+const DAILY_FIELDS = ["weather_code", "temperature_2m_max", "temperature_2m_min"];
+const FORECAST_DAYS = 7;
 
 // ===== Errors =====
 // The request never reached the server (offline, DNS, blocked...)
@@ -104,6 +109,8 @@ async function fetchWeather(latitude, longitude) {
     latitude,
     longitude,
     current: CURRENT_FIELDS.join(","),
+    daily: DAILY_FIELDS.join(","),
+    forecast_days: FORECAST_DAYS,
     timezone: "auto", // times come back in the city's own time zone
   });
 
@@ -130,6 +137,12 @@ function formatPlaceDetail(place) {
   return [place.admin1, place.country].filter(Boolean).join(", ");
 }
 
+// "2026-10-17" -> "Sat". Built from parts so it isn't shifted by time zones.
+function formatWeekday(dateString) {
+  const [year, month, day] = dateString.split("-").map(Number);
+  return new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short" });
+}
+
 // "2026-10-17T14:00" -> "14:00"
 function formatLocalTime(isoString) {
   return isoString.split("T")[1];
@@ -146,6 +159,62 @@ function showStatus(message, { loading = false, error = false } = {}) {
 
 function hideResults() {
   currentSection.hidden = true;
+  forecastSection.hidden = true;
+}
+
+// The API sends one array per value:
+//   { time: ["2026-10-17", "2026-10-18"], temperature_2m_max: [31, 30], ... }
+// It's easier to work with one object per day:
+//   [{ date: "2026-10-17", max: 31, ... }, { date: "2026-10-18", max: 30, ... }]
+function toDailyForecast(daily) {
+  return daily.time.map((date, index) => ({
+    date,
+    code: daily.weather_code[index],
+    max: daily.temperature_2m_max[index],
+    min: daily.temperature_2m_min[index],
+  }));
+}
+
+function createForecastItem(day, index) {
+  const { description, icon } = getWeatherInfo(day.code);
+
+  const item = document.createElement("li");
+  item.className = "forecast-item";
+
+  const dayName = document.createElement("span");
+  dayName.className = "forecast-item__day";
+  // The first day is today in the city's own time zone
+  dayName.textContent = index === 0 ? "Today" : formatWeekday(day.date);
+
+  const iconEl = document.createElement("span");
+  iconEl.className = "forecast-item__icon";
+  iconEl.setAttribute("aria-hidden", "true");
+  iconEl.textContent = icon;
+
+  const descriptionEl = document.createElement("span");
+  descriptionEl.className = "forecast-item__description";
+  descriptionEl.textContent = description;
+
+  const temps = document.createElement("span");
+  temps.className = "forecast-item__temps";
+
+  const max = document.createElement("span");
+  max.className = "forecast-item__max";
+  max.textContent = formatTemperature(day.max);
+
+  const min = document.createElement("span");
+  min.className = "forecast-item__min";
+  min.textContent = formatTemperature(day.min);
+
+  temps.append(max, min);
+  item.append(dayName, iconEl, descriptionEl, temps);
+  return item;
+}
+
+function renderForecast(weather) {
+  const days = toDailyForecast(weather.daily);
+  forecastList.replaceChildren(...days.map(createForecastItem));
+  forecastSection.hidden = false;
 }
 
 function renderCurrentWeather(place, weather) {
@@ -196,6 +265,7 @@ async function handleSearch(event) {
 
     const weather = await fetchWeather(place.latitude, place.longitude);
     renderCurrentWeather(place, weather);
+    renderForecast(weather);
   } catch (error) {
     console.error(error); // full details for you, a friendly message for the user
     hideResults();
