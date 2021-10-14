@@ -15,6 +15,8 @@ const wind = document.getElementById("wind");
 const updatedTime = document.getElementById("updated-time");
 const forecastSection = document.getElementById("forecast");
 const forecastList = document.getElementById("forecast-list");
+const cityChoices = document.getElementById("city-choices");
+const cityList = document.getElementById("city-list");
 
 // ===== Config =====
 const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
@@ -33,6 +35,11 @@ const CURRENT_FIELDS = [
 
 const DAILY_FIELDS = ["weather_code", "temperature_2m_max", "temperature_2m_min"];
 const FORECAST_DAYS = 7;
+
+// ===== State =====
+const state = {
+  cityResults: [], // matches from the last search, shown as choices
+};
 
 // ===== Errors =====
 // The request never reached the server (offline, DNS, blocked...)
@@ -137,6 +144,13 @@ function formatPlaceDetail(place) {
   return [place.admin1, place.country].filter(Boolean).join(", ");
 }
 
+// 15388000 -> "15M", 540 -> "540"
+const compactNumber = new Intl.NumberFormat("en", { notation: "compact" });
+
+function formatPopulation(population) {
+  return population ? `${compactNumber.format(population)} people` : "";
+}
+
 // "2026-10-17" -> "Sat". Built from parts so it isn't shifted by time zones.
 function formatWeekday(dateString) {
   const [year, month, day] = dateString.split("-").map(Number);
@@ -160,6 +174,40 @@ function showStatus(message, { loading = false, error = false } = {}) {
 function hideResults() {
   currentSection.hidden = true;
   forecastSection.hidden = true;
+  cityChoices.hidden = true;
+}
+
+function createCityOption(place, index) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "city-option";
+  button.dataset.index = index;
+
+  const name = document.createElement("span");
+  name.className = "city-option__name";
+  name.textContent = place.name;
+
+  const detail = document.createElement("span");
+  detail.className = "city-option__detail";
+  detail.textContent = [formatPlaceDetail(place), formatPopulation(place.population)]
+    .filter(Boolean)
+    .join(" · ");
+
+  button.append(name, detail);
+
+  const item = document.createElement("li");
+  item.append(button);
+  return item;
+}
+
+function renderCityChoices(cities) {
+  state.cityResults = cities;
+  cityList.replaceChildren(...cities.map(createCityOption));
+
+  statusEl.hidden = true;
+  cityChoices.hidden = false;
+  // Put keyboard users straight on the first option
+  cityList.querySelector("button").focus();
 }
 
 // The API sends one array per value:
@@ -252,26 +300,51 @@ async function handleSearch(event) {
   hideResults();
   showStatus(`Searching for “${query}”…`, { loading: true });
 
+  let cities;
   try {
-    const cities = await searchCities(query);
-    if (cities.length === 0) {
-      showStatus(`No city called “${query}” was found. Check the spelling and try again.`);
-      return;
-    }
+    cities = await searchCities(query);
+  } catch (error) {
+    showError(error);
+    return;
+  }
 
-    // For now, use the best match (choosing between cities comes in Step 11)
-    const place = cities[0];
-    showStatus(`Loading the weather for ${place.name}…`, { loading: true });
+  if (cities.length === 0) {
+    showStatus(`No city called “${query}” was found. Check the spelling and try again.`);
+  } else if (cities.length === 1) {
+    loadWeather(cities[0]);
+  } else {
+    renderCityChoices(cities);
+  }
+}
 
+function handleCityChoice(event) {
+  const button = event.target.closest(".city-option");
+  if (!button) return;
+
+  const place = state.cityResults[Number(button.dataset.index)];
+  loadWeather(place);
+}
+
+// ===== Loading weather =====
+async function loadWeather(place) {
+  hideResults();
+  showStatus(`Loading the weather for ${place.name}…`, { loading: true });
+
+  try {
     const weather = await fetchWeather(place.latitude, place.longitude);
     renderCurrentWeather(place, weather);
     renderForecast(weather);
   } catch (error) {
-    console.error(error); // full details for you, a friendly message for the user
-    hideResults();
-    showStatus(getErrorMessage(error), { error: true });
+    showError(error);
   }
+}
+
+function showError(error) {
+  console.error(error); // full details for you, a friendly message for the user
+  hideResults();
+  showStatus(getErrorMessage(error), { error: true });
 }
 
 // ===== Init =====
 searchForm.addEventListener("submit", handleSearch);
+cityList.addEventListener("click", handleCityChoice);
