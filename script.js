@@ -17,6 +17,8 @@ const forecastSection = document.getElementById("forecast");
 const forecastList = document.getElementById("forecast-list");
 const cityChoices = document.getElementById("city-choices");
 const cityList = document.getElementById("city-list");
+const unitsEl = document.querySelector(".units");
+const unitButtons = document.querySelectorAll(".unit-btn");
 
 // ===== Config =====
 const GEOCODING_URL = "https://geocoding-api.open-meteo.com/v1/search";
@@ -36,9 +38,17 @@ const CURRENT_FIELDS = [
 const DAILY_FIELDS = ["weather_code", "temperature_2m_max", "temperature_2m_min"];
 const FORECAST_DAYS = 7;
 
+// The API's own unit names for each choice
+const UNIT_PARAMS = {
+  celsius: { temperature_unit: "celsius", wind_speed_unit: "kmh" },
+  fahrenheit: { temperature_unit: "fahrenheit", wind_speed_unit: "mph" },
+};
+
 // ===== State =====
 const state = {
   cityResults: [], // matches from the last search, shown as choices
+  currentPlace: null, // the place whose weather is showing
+  unit: "celsius", // "celsius" | "fahrenheit"
 };
 
 // ===== Errors =====
@@ -110,11 +120,12 @@ async function searchCities(name) {
   return data.results ?? [];
 }
 
-// Coordinates -> weather data
-async function fetchWeather(latitude, longitude) {
+// Coordinates -> weather data, in the chosen units
+async function fetchWeather(latitude, longitude, unit) {
   const params = new URLSearchParams({
     latitude,
     longitude,
+    ...UNIT_PARAMS[unit],
     current: CURRENT_FIELDS.join(","),
     daily: DAILY_FIELDS.join(","),
     forecast_days: FORECAST_DAYS,
@@ -200,6 +211,12 @@ function createCityOption(place, index) {
   return item;
 }
 
+function renderUnitButtons() {
+  unitButtons.forEach((button) => {
+    button.setAttribute("aria-pressed", button.dataset.unit === state.unit);
+  });
+}
+
 function renderCityChoices(cities) {
   state.cityResults = cities;
   cityList.replaceChildren(...cities.map(createCityOption));
@@ -279,7 +296,9 @@ function renderCurrentWeather(place, weather) {
 
   feelsLike.textContent = formatTemperature(current.apparent_temperature);
   humidity.textContent = `${current.relative_humidity_2m}${units.relative_humidity_2m}`;
-  wind.textContent = `${Math.round(current.wind_speed_10m)} ${units.wind_speed_10m}`;
+  // The API writes miles per hour as "mp/h"; "mph" is what people expect
+  const windUnit = units.wind_speed_10m.replace("mp/h", "mph");
+  wind.textContent = `${Math.round(current.wind_speed_10m)} ${windUnit}`;
   updatedTime.textContent = `Updated ${formatLocalTime(current.time)} local time`;
 
   statusEl.hidden = true;
@@ -325,13 +344,27 @@ function handleCityChoice(event) {
   loadWeather(place);
 }
 
+function handleUnitClick(event) {
+  const button = event.target.closest(".unit-btn");
+  if (!button || button.dataset.unit === state.unit) return;
+
+  state.unit = button.dataset.unit;
+  renderUnitButtons();
+
+  // Reload the city that's showing, in the new units
+  if (state.currentPlace) {
+    loadWeather(state.currentPlace);
+  }
+}
+
 // ===== Loading weather =====
 async function loadWeather(place) {
+  state.currentPlace = place;
   hideResults();
   showStatus(`Loading the weather for ${place.name}…`, { loading: true });
 
   try {
-    const weather = await fetchWeather(place.latitude, place.longitude);
+    const weather = await fetchWeather(place.latitude, place.longitude, state.unit);
     renderCurrentWeather(place, weather);
     renderForecast(weather);
   } catch (error) {
@@ -348,3 +381,5 @@ function showError(error) {
 // ===== Init =====
 searchForm.addEventListener("submit", handleSearch);
 cityList.addEventListener("click", handleCityChoice);
+unitsEl.addEventListener("click", handleUnitClick);
+renderUnitButtons();
