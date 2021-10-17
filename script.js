@@ -1,6 +1,7 @@
 // ===== DOM elements =====
 const searchForm = document.getElementById("search-form");
 const cityInput = document.getElementById("city-input");
+const locationBtn = document.getElementById("location-btn");
 const statusEl = document.getElementById("status");
 const statusMessage = document.getElementById("status-message");
 const currentSection = document.getElementById("current-weather");
@@ -69,8 +70,28 @@ class ApiError extends Error {
   }
 }
 
+// The browser couldn't give us the user's location
+class LocationError extends Error {
+  constructor(reason) {
+    super(`Location unavailable: ${reason}`);
+    this.name = "LocationError";
+    this.reason = reason; // "denied" | "unavailable" | "timeout" | "unsupported"
+  }
+}
+
+const LOCATION_ERROR_MESSAGES = {
+  denied:
+    "Location access is blocked. Allow it in your browser's site settings, or search for a city instead.",
+  unavailable: "Your location couldn't be found. Try searching for a city instead.",
+  timeout: "Finding your location took too long. Please try again.",
+  unsupported: "This browser can't share your location. Search for a city instead.",
+};
+
 // Turn any error into a message a user can act on
 function getErrorMessage(error) {
+  if (error instanceof LocationError) {
+    return LOCATION_ERROR_MESSAGES[error.reason];
+  }
   if (error instanceof NetworkError) {
     return navigator.onLine
       ? "Couldn't reach the weather service. Check your connection, and that your computer's date and time are correct."
@@ -135,6 +156,34 @@ async function fetchWeather(latitude, longitude, unit) {
   return fetchJson(`${FORECAST_URL}?${params}`);
 }
 
+// ===== Geolocation =====
+// The browser's numeric error codes, as words
+const GEOLOCATION_ERRORS = {
+  1: "denied", // PERMISSION_DENIED
+  2: "unavailable", // POSITION_UNAVAILABLE
+  3: "timeout", // TIMEOUT
+};
+
+// getCurrentPosition() uses callbacks, not promises.
+// Wrapping it in a Promise lets us use it with await like fetch().
+function getCurrentPosition() {
+  return new Promise((resolve, reject) => {
+    if (!("geolocation" in navigator)) {
+      reject(new LocationError("unsupported"));
+      return;
+    }
+
+    navigator.geolocation.getCurrentPosition(
+      resolve,
+      (error) => reject(new LocationError(GEOLOCATION_ERRORS[error.code] ?? "unavailable")),
+      {
+        timeout: 10_000, // give up after 10 seconds
+        maximumAge: 10 * 60 * 1000, // a position from the last 10 minutes is fine
+      }
+    );
+  });
+}
+
 // ===== Weather codes =====
 const UNKNOWN_WEATHER = { description: "Unknown conditions", icon: "🌡️" };
 
@@ -150,9 +199,17 @@ function formatTemperature(value) {
   return `${Math.round(value)}°`;
 }
 
-// "Lagos, Nigeria" -- skipping any part the API didn't send
+// "Lagos, Nigeria" -- skipping any part the API didn't send.
+// Places we made ourselves (like "Your location") bring their own detail.
 function formatPlaceDetail(place) {
-  return [place.admin1, place.country].filter(Boolean).join(", ");
+  return place.detail ?? [place.admin1, place.country].filter(Boolean).join(", ");
+}
+
+// (6.4541, 3.3947) -> "6.45°N, 3.39°E"
+function formatCoordinates(latitude, longitude) {
+  const lat = `${Math.abs(latitude).toFixed(2)}°${latitude >= 0 ? "N" : "S"}`;
+  const lon = `${Math.abs(longitude).toFixed(2)}°${longitude >= 0 ? "E" : "W"}`;
+  return `${lat}, ${lon}`;
 }
 
 // 15388000 -> "15M", 540 -> "540"
@@ -344,6 +401,27 @@ function handleCityChoice(event) {
   loadWeather(place);
 }
 
+async function handleLocationClick() {
+  hideResults();
+  showStatus("Finding your location…", { loading: true });
+
+  try {
+    const position = await getCurrentPosition();
+    const { latitude, longitude } = position.coords;
+
+    // The API can't turn coordinates back into a city name,
+    // so describe the place ourselves
+    loadWeather({
+      name: "Your location",
+      detail: formatCoordinates(latitude, longitude),
+      latitude,
+      longitude,
+    });
+  } catch (error) {
+    showError(error);
+  }
+}
+
 function handleUnitClick(event) {
   const button = event.target.closest(".unit-btn");
   if (!button || button.dataset.unit === state.unit) return;
@@ -381,5 +459,6 @@ function showError(error) {
 // ===== Init =====
 searchForm.addEventListener("submit", handleSearch);
 cityList.addEventListener("click", handleCityChoice);
+locationBtn.addEventListener("click", handleLocationClick);
 unitsEl.addEventListener("click", handleUnitClick);
 renderUnitButtons();
