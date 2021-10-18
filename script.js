@@ -45,6 +45,8 @@ const UNIT_PARAMS = {
   fahrenheit: { temperature_unit: "fahrenheit", wind_speed_unit: "mph" },
 };
 
+const STORAGE_KEY = "weather-app:preferences";
+
 // ===== State =====
 const state = {
   cityResults: [], // matches from the last search, shown as choices
@@ -154,6 +156,53 @@ async function fetchWeather(latitude, longitude, unit) {
   });
 
   return fetchJson(`${FORECAST_URL}?${params}`);
+}
+
+// ===== Storage =====
+// Saved as: { unit: "celsius", lastPlace: { name, latitude, longitude, ... } }
+
+function isValidPlace(place) {
+  return (
+    Boolean(place) &&
+    typeof place.name === "string" &&
+    Number.isFinite(place.latitude) &&
+    Number.isFinite(place.longitude) &&
+    Math.abs(place.latitude) <= 90 &&
+    Math.abs(place.longitude) <= 180
+  );
+}
+
+function loadPreferences() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY));
+    if (!saved || typeof saved !== "object") return {};
+
+    // Only keep values we can trust
+    return {
+      // hasOwn, not `in`: "toString" in UNIT_PARAMS is true (inherited)
+      unit: Object.hasOwn(UNIT_PARAMS, saved.unit) ? saved.unit : undefined,
+      lastPlace: isValidPlace(saved.lastPlace) ? saved.lastPlace : undefined,
+    };
+  } catch (error) {
+    console.error("Could not load preferences:", error);
+    return {};
+  }
+}
+
+// Merge new values into what's already saved
+function savePreferences(updates) {
+  try {
+    const next = { ...loadPreferences(), ...updates };
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+  } catch (error) {
+    console.error("Could not save preferences:", error);
+  }
+}
+
+// Keep only what's needed to load the place again
+function toSavedPlace(place) {
+  const { name, admin1, country, detail, latitude, longitude } = place;
+  return { name, admin1, country, detail, latitude, longitude };
 }
 
 // ===== Geolocation =====
@@ -428,6 +477,7 @@ function handleUnitClick(event) {
 
   state.unit = button.dataset.unit;
   renderUnitButtons();
+  savePreferences({ unit: state.unit });
 
   // Reload the city that's showing, in the new units
   if (state.currentPlace) {
@@ -445,6 +495,8 @@ async function loadWeather(place) {
     const weather = await fetchWeather(place.latitude, place.longitude, state.unit);
     renderCurrentWeather(place, weather);
     renderForecast(weather);
+    // Only remember places that actually loaded
+    savePreferences({ lastPlace: toSavedPlace(place) });
   } catch (error) {
     showError(error);
   }
@@ -461,4 +513,12 @@ searchForm.addEventListener("submit", handleSearch);
 cityList.addEventListener("click", handleCityChoice);
 locationBtn.addEventListener("click", handleLocationClick);
 unitsEl.addEventListener("click", handleUnitClick);
+
+const preferences = loadPreferences();
+state.unit = preferences.unit ?? state.unit;
 renderUnitButtons();
+
+// Welcome back: show the last city straight away
+if (preferences.lastPlace) {
+  loadWeather(preferences.lastPlace);
+}
