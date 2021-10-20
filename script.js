@@ -52,6 +52,7 @@ const state = {
   cityResults: [], // matches from the last search, shown as choices
   currentPlace: null, // the place whose weather is showing
   unit: "celsius", // "celsius" | "fahrenheit"
+  controller: null, // AbortController for the request in progress
 };
 
 // ===== Errors =====
@@ -108,14 +109,29 @@ function getErrorMessage(error) {
   return "Something went wrong while loading the weather. Please try again.";
 }
 
+// A request we cancelled on purpose: not a real error, so show nothing
+function isAbortError(error) {
+  return error.name === "AbortError";
+}
+
+// ===== Requests =====
+// Only the newest request matters. Starting one cancels the one before,
+// so a slow old response can never overwrite a newer one.
+function startRequest() {
+  state.controller?.abort();
+  state.controller = new AbortController();
+  return state.controller.signal;
+}
+
 // ===== API =====
 // fetch() only fails on network problems. A 404 or 500 still "succeeds",
 // so check response.ok and throw our own errors for both cases.
-async function fetchJson(url) {
+async function fetchJson(url, signal) {
   let response;
   try {
-    response = await fetch(url);
-  } catch {
+    response = await fetch(url, { signal });
+  } catch (error) {
+    if (isAbortError(error)) throw error; // let cancellations pass through
     throw new NetworkError();
   }
 
@@ -129,7 +145,7 @@ async function fetchJson(url) {
 }
 
 // City name -> array of matching places (with latitude and longitude)
-async function searchCities(name) {
+async function searchCities(name, signal) {
   const params = new URLSearchParams({
     name,
     count: MAX_CITY_RESULTS,
@@ -137,14 +153,14 @@ async function searchCities(name) {
     format: "json",
   });
 
-  const data = await fetchJson(`${GEOCODING_URL}?${params}`);
+  const data = await fetchJson(`${GEOCODING_URL}?${params}`, signal);
 
   // When nothing matches, the API leaves out `results` entirely
   return data.results ?? [];
 }
 
 // Coordinates -> weather data, in the chosen units
-async function fetchWeather(latitude, longitude, unit) {
+async function fetchWeather(latitude, longitude, unit, signal) {
   const params = new URLSearchParams({
     latitude,
     longitude,
@@ -155,7 +171,7 @@ async function fetchWeather(latitude, longitude, unit) {
     timezone: "auto", // times come back in the city's own time zone
   });
 
-  return fetchJson(`${FORECAST_URL}?${params}`);
+  return fetchJson(`${FORECAST_URL}?${params}`, signal);
 }
 
 // ===== Storage =====
@@ -422,14 +438,15 @@ async function handleSearch(event) {
     return;
   }
 
+  const signal = startRequest();
   hideResults();
   showStatus(`Searching for “${query}”…`, { loading: true });
 
   let cities;
   try {
-    cities = await searchCities(query);
+    cities = await searchCities(query, signal);
   } catch (error) {
-    showError(error);
+    if (!isAbortError(error)) showError(error);
     return;
   }
 
@@ -451,11 +468,16 @@ function handleCityChoice(event) {
 }
 
 async function handleLocationClick() {
+  const signal = startRequest();
   hideResults();
   showStatus("Finding your location…", { loading: true });
 
   try {
     const position = await getCurrentPosition();
+    // Finding a location can take seconds. If the user searched
+    // for a city in the meantime, that newer request wins.
+    if (signal.aborted) return;
+
     const { latitude, longitude } = position.coords;
 
     // The API can't turn coordinates back into a city name,
@@ -467,7 +489,7 @@ async function handleLocationClick() {
       longitude,
     });
   } catch (error) {
-    showError(error);
+    if (!signal.aborted) showError(error);
   }
 }
 
@@ -487,18 +509,19 @@ function handleUnitClick(event) {
 
 // ===== Loading weather =====
 async function loadWeather(place) {
+  const signal = startRequest();
   state.currentPlace = place;
   hideResults();
   showStatus(`Loading the weather for ${place.name}…`, { loading: true });
 
   try {
-    const weather = await fetchWeather(place.latitude, place.longitude, state.unit);
+    const weather = await fetchWeather(place.latitude, place.longitude, state.unit, signal);
     renderCurrentWeather(place, weather);
     renderForecast(weather);
     // Only remember places that actually loaded
     savePreferences({ lastPlace: toSavedPlace(place) });
   } catch (error) {
-    showError(error);
+    if (!isAbortError(error)) showError(error);
   }
 }
 
